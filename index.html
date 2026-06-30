@@ -3,45 +3,132 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#060711" />
-    <title>Finger Flow</title>
+    <meta name="theme-color" content="#070816" />
+    <title>FingerPlay</title>
   </head>
   <body>
     <main class="app-shell">
-      <section class="stage" aria-label="Finger Flow camera stage">
+      <section class="stage" aria-label="FingerPlay camera stage">
         <video id="camera" autoplay playsinline muted></video>
         <canvas id="scene"></canvas>
+        <div class="aurora-bg" aria-hidden="true"></div>
+        <div class="vignette" aria-hidden="true"></div>
 
-        <div class="vignette"></div>
-
-        <div class="hud top-left">
-          <div class="brand-dot"></div>
-          <div>
-            <p class="eyebrow">Finger Flow</p>
-            <h1>Move your finger. Make it glow.</h1>
+        <header class="topbar glass-card">
+          <div class="brand-lockup">
+            <div class="brand-orb" aria-hidden="true"></div>
+            <div>
+              <p class="eyebrow">Liquid camera playground</p>
+              <h1>FingerPlay</h1>
+            </div>
           </div>
-        </div>
 
-        <div class="hud top-right stats">
-          <span id="handStatus">Camera idle</span>
-          <span id="particleCount">0 particles</span>
-        </div>
+          <div class="status-pill">
+            <span class="pulse-dot" aria-hidden="true"></span>
+            <span id="handStatus">Camera idle</span>
+          </div>
+        </header>
 
-        <div class="start-panel" id="startPanel">
-          <p class="eyebrow">Camera + hand tracking</p>
-          <h2>Draw with your index finger</h2>
-          <p>
-            Pinch your thumb and index finger to explode particles. Move faster for longer trails.
+        <aside class="mode-panel glass-card" aria-label="Visual modes">
+          <p class="panel-label">Modes</p>
+          <div class="mode-grid" id="modeGrid">
+            <button class="mode-button is-active" type="button" data-mode="liquid">
+              <span>🌊</span>
+              <strong>Liquid</strong>
+            </button>
+            <button class="mode-button" type="button" data-mode="allFingers">
+              <span>🖐️</span>
+              <strong>All Fingers</strong>
+            </button>
+            <button class="mode-button" type="button" data-mode="skeleton3d">
+              <span>🧬</span>
+              <strong>3D Hand</strong>
+            </button>
+            <button class="mode-button" type="button" data-mode="ribbons">
+              <span>🎀</span>
+              <strong>Ribbons</strong>
+            </button>
+            <button class="mode-button" type="button" data-mode="constellation">
+              <span>✨</span>
+              <strong>Constellation</strong>
+            </button>
+            <button class="mode-button" type="button" data-mode="gravity">
+              <span>🪐</span>
+              <strong>Gravity</strong>
+            </button>
+          </div>
+        </aside>
+
+        <aside class="tools-panel glass-card" aria-label="FingerPlay tools">
+          <div class="panel-header">
+            <div>
+              <p class="panel-label">Tools</p>
+              <h2 id="modeTitle">Liquid Flow</h2>
+            </div>
+            <span id="particleCount">0</span>
+          </div>
+
+          <p class="mode-description" id="modeDescription">
+            Index finger paints soft liquid trails. Pinch to burst.
           </p>
-          <button id="startButton" type="button">Start tracking</button>
-          <small>Best on HTTPS or localhost.</small>
+
+          <div class="control-group">
+            <label for="cameraOpacity">Camera opacity <span id="cameraOpacityValue">42%</span></label>
+            <input id="cameraOpacity" type="range" min="0" max="100" value="42" />
+          </div>
+
+          <div class="control-group">
+            <label for="particleIntensity">Particle intensity <span id="particleIntensityValue">125%</span></label>
+            <input id="particleIntensity" type="range" min="20" max="220" value="125" />
+          </div>
+
+          <div class="control-group">
+            <label for="glowStrength">Glow strength <span id="glowStrengthValue">120%</span></label>
+            <input id="glowStrength" type="range" min="30" max="220" value="120" />
+          </div>
+
+          <div class="control-group">
+            <label for="trailLife">Trail life <span id="trailLifeValue">110%</span></label>
+            <input id="trailLife" type="range" min="35" max="220" value="110" />
+          </div>
+
+          <div class="control-group">
+            <label for="smoothing">Smoothing <span id="smoothingValue">28%</span></label>
+            <input id="smoothing" type="range" min="8" max="60" value="28" />
+          </div>
+
+          <div class="toggle-row">
+            <label class="switch">
+              <input id="showSkeleton" type="checkbox" checked />
+              <span></span>
+              Skeleton
+            </label>
+            <label class="switch">
+              <input id="mirrorCamera" type="checkbox" checked />
+              <span></span>
+              Mirror
+            </label>
+          </div>
+
+          <button id="clearButton" class="ghost-button" type="button">Clear particles</button>
+        </aside>
+
+        <div class="start-panel glass-card" id="startPanel">
+          <p class="eyebrow">Camera + finger tracking</p>
+          <h2>Play with your hands.</h2>
+          <p>
+            Move your fingers to bend liquid light. Pinch your thumb and index finger to explode the flow.
+          </p>
+          <button id="startButton" type="button">Start FingerPlay</button>
+          <small>Works best on HTTPS or localhost. Allow camera permission when prompted.</small>
         </div>
 
-        <div class="hint-bar">
-          <span>☝️ index finger = trail</span>
+        <footer class="hint-bar glass-card">
+          <span>☝️ index = draw</span>
+          <span>🖐️ all fingers = multi trail</span>
           <span>🤏 pinch = burst</span>
-          <span>🖐️ open hand = smooth flow</span>
-        </div>
+          <span>⚙️ tune liquid tools</span>
+        </footer>
       </section>
     </main>
 
