@@ -44,11 +44,11 @@ const HAND_CONNECTIONS = [
 const MODE_META = {
   liquid: {
     title: 'Liquid Flow',
-    description: 'Index finger paints lightweight liquid trails. Pinch to burst.',
+    description: 'Index finger paints visible liquid trails. Pinch to burst.',
   },
   allFingers: {
     title: 'All Fingers',
-    description: 'Every fingertip becomes a brush without overloading the browser.',
+    description: 'Two-hand tracking is enabled. Every fingertip becomes a brush.',
   },
   skeleton3d: {
     title: '3D Hand',
@@ -69,11 +69,11 @@ const MODE_META = {
 };
 
 const settings = {
-  mode: 'liquid',
+  mode: 'allFingers',
   cameraOpacity: 0.36,
-  intensity: 0.75,
-  glow: 0.8,
-  trailLife: 0.85,
+  intensity: 1,
+  glow: 1.05,
+  trailLife: 1.05,
   smoothing: 0.24,
   showSkeleton: true,
   mirror: true,
@@ -81,8 +81,8 @@ const settings = {
 };
 
 const CONFIG = {
-  baseTrailSpawn: 2.2,
-  burstSpawn: 34,
+  baseTrailSpawn: 3.2,
+  burstSpawn: 48,
   pinchThreshold: 0.055,
   pinchCooldownMs: 320,
 };
@@ -112,7 +112,7 @@ function setStatus(message) {
 }
 
 function maxParticles() {
-  const base = settings.lowPower ? 360 : 760;
+  const base = settings.lowPower ? 520 : 900;
   return Math.floor(base * clamp(settings.intensity, 0.4, 1.45));
 }
 
@@ -196,7 +196,7 @@ function spawnParticle(point, options = {}) {
     life = [0.45, 0.82],
   } = options;
 
-  const perfScale = settings.lowPower ? 0.62 : 1;
+  const perfScale = settings.lowPower ? 0.82 : 1;
   const scaledAmount = Math.max(1, Math.floor(amount * settings.intensity * perfScale));
 
   for (let i = 0; i < scaledAmount; i += 1) {
@@ -213,14 +213,14 @@ function spawnParticle(point, options = {}) {
       vy: Math.sin(angle) * drift + randomBetween(-0.28, 0.28),
       size: particleSize,
       life: randomBetween(life[0], life[1]),
-      decay: randomBetween(0.012, 0.024) / settings.trailLife,
+      decay: randomBetween(0.01, 0.021) / settings.trailLife,
       hue: (hue + randomBetween(-28, 42)) % 360,
     });
   }
 }
 
 function spawnTrail(point, speed, hue = hueBase) {
-  const intensity = Math.min(settings.lowPower ? 2 : 2.8, 0.65 + speed * 0.014);
+  const intensity = Math.min(settings.lowPower ? 2.4 : 3.1, 0.75 + speed * 0.016);
   hueBase = (hueBase + 0.55 + speed * 0.012) % 360;
 
   spawnParticle(point, {
@@ -228,20 +228,20 @@ function spawnTrail(point, speed, hue = hueBase) {
     speed,
     hue,
     spread: 5 + speed * 0.01,
-    size: settings.lowPower ? [2.8, 9] : [3.5, 13],
-    velocity: [0.08, settings.lowPower ? 1.8 : 2.6],
+    size: settings.lowPower ? [3.4, 12] : [4, 15],
+    velocity: [0.08, settings.lowPower ? 2.1 : 2.8],
   });
 }
 
 function spawnBurst(point) {
   hueBase = (hueBase + 46) % 360;
-  const amount = Math.floor(CONFIG.burstSpawn * settings.intensity * (settings.lowPower ? 0.7 : 1.15));
+  const amount = Math.floor(CONFIG.burstSpawn * settings.intensity * (settings.lowPower ? 0.9 : 1.2));
 
   for (let i = 0; i < amount; i += 1) {
     if (particles.length >= maxParticles()) break;
 
     const angle = (i / amount) * Math.PI * 2 + randomBetween(-0.18, 0.18);
-    const velocity = randomBetween(2.2, settings.lowPower ? 7.5 : 11.5);
+    const velocity = randomBetween(2.2, settings.lowPower ? 9 : 12);
     const warmHue = i % 3 === 0 ? 318 : i % 3 === 1 ? 190 : 52;
 
     particles.push({
@@ -249,9 +249,9 @@ function spawnBurst(point) {
       y: point.y,
       vx: Math.cos(angle) * velocity,
       vy: Math.sin(angle) * velocity,
-      size: randomBetween(4, settings.lowPower ? 14 : 22) * settings.glow,
-      life: randomBetween(0.58, 0.92),
-      decay: randomBetween(0.014, 0.028) / settings.trailLife,
+      size: randomBetween(5, settings.lowPower ? 16 : 24) * settings.glow,
+      life: randomBetween(0.62, 0.98),
+      decay: randomBetween(0.012, 0.026) / settings.trailLife,
       hue: warmHue + randomBetween(-18, 18),
     });
   }
@@ -260,7 +260,7 @@ function spawnBurst(point) {
 function addRibbonSegment(from, to, hue, width = 16) {
   if (!from || !to) return;
   const speed = distance(from, to);
-  if (speed < 0.7) return;
+  if (speed < 0.55) return;
 
   ribbons.push({
     x1: from.x,
@@ -270,12 +270,12 @@ function addRibbonSegment(from, to, hue, width = 16) {
     cx: (from.x + to.x) / 2 + randomBetween(-14, 14),
     cy: (from.y + to.y) / 2 + randomBetween(-14, 14),
     hue,
-    width: clamp(width + speed * 0.035, 6, settings.lowPower ? 22 : 32),
+    width: clamp(width + speed * 0.04, 8, settings.lowPower ? 28 : 34),
     life: 1,
-    decay: randomBetween(0.024, 0.04) / settings.trailLife,
+    decay: randomBetween(0.018, 0.032) / settings.trailLife,
   });
 
-  const maxRibbons = settings.lowPower ? 70 : 160;
+  const maxRibbons = settings.lowPower ? 130 : 220;
   if (ribbons.length > maxRibbons) {
     ribbons.splice(0, ribbons.length - maxRibbons);
   }
@@ -285,11 +285,11 @@ function drawAura(x, y, radius, hue, alpha) {
   if (settings.lowPower) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.shadowBlur = radius * 0.35 * settings.glow;
-    ctx.shadowColor = `hsla(${hue}, 100%, 68%, ${alpha})`;
-    ctx.fillStyle = `hsla(${hue}, 100%, 68%, ${alpha * 0.45})`;
+    ctx.shadowBlur = radius * 0.55 * settings.glow;
+    ctx.shadowColor = `hsla(${hue}, 100%, 70%, ${alpha})`;
+    ctx.fillStyle = `hsla(${hue}, 100%, 70%, ${alpha * 0.55})`;
     ctx.beginPath();
-    ctx.arc(x, y, radius * 0.35, 0, Math.PI * 2);
+    ctx.arc(x, y, radius * 0.42, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     return;
@@ -333,11 +333,9 @@ function drawRibbons(delta) {
     const alpha = clamp(ribbon.life, 0, 1);
 
     ctx.lineWidth = ribbon.width * alpha;
-    ctx.strokeStyle = `hsla(${ribbon.hue}, 100%, 70%, ${alpha * (settings.lowPower ? 0.24 : 0.34)})`;
-    if (!settings.lowPower) {
-      ctx.shadowBlur = 16 * settings.glow;
-      ctx.shadowColor = `hsla(${ribbon.hue}, 100%, 65%, ${alpha})`;
-    }
+    ctx.strokeStyle = `hsla(${ribbon.hue}, 100%, 72%, ${alpha * (settings.lowPower ? 0.48 : 0.42)})`;
+    ctx.shadowBlur = settings.lowPower ? 8 * settings.glow : 18 * settings.glow;
+    ctx.shadowColor = `hsla(${ribbon.hue}, 100%, 65%, ${alpha})`;
     ctx.beginPath();
     ctx.moveTo(ribbon.x1, ribbon.y1);
     ctx.quadraticCurveTo(ribbon.cx, ribbon.cy, ribbon.x2, ribbon.y2);
@@ -353,10 +351,7 @@ function updateAndDrawParticles(delta) {
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-
-  if (!settings.lowPower) {
-    ctx.shadowBlur = 12 * settings.glow;
-  }
+  ctx.shadowBlur = settings.lowPower ? 7 * settings.glow : 13 * settings.glow;
 
   for (const particle of particles) {
     if (attractors.length) {
@@ -392,12 +387,10 @@ function updateAndDrawParticles(delta) {
     particle.size *= 0.992;
 
     const alpha = Math.max(0, particle.life);
-    const radius = Math.max(0.8, particle.size * (settings.lowPower ? 0.55 : 0.75));
+    const radius = Math.max(1.2, particle.size * (settings.lowPower ? 0.72 : 0.78));
 
-    if (!settings.lowPower) {
-      ctx.shadowColor = `hsla(${particle.hue}, 100%, 70%, ${alpha})`;
-    }
-    ctx.fillStyle = `hsla(${particle.hue}, 100%, 74%, ${alpha * 0.88})`;
+    ctx.shadowColor = `hsla(${particle.hue}, 100%, 70%, ${alpha})`;
+    ctx.fillStyle = `hsla(${particle.hue}, 100%, 76%, ${alpha * 0.95})`;
     ctx.beginPath();
     ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -418,18 +411,18 @@ function updateAndDrawParticles(delta) {
 function drawFingerCursor(point) {
   if (!point) return;
 
-  drawAura(point.x, point.y, pinchActive ? 52 : 34, pinchActive ? 315 : hueBase, 0.46);
+  drawAura(point.x, point.y, pinchActive ? 58 : 42, pinchActive ? 315 : hueBase, 0.55);
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  ctx.strokeStyle = pinchActive ? 'rgba(255, 160, 232, 0.92)' : 'rgba(127, 240, 255, 0.86)';
+  ctx.strokeStyle = pinchActive ? 'rgba(255, 160, 232, 0.95)' : 'rgba(127, 240, 255, 0.92)';
   ctx.lineWidth = pinchActive ? 3 : 2;
   ctx.beginPath();
   ctx.arc(point.x, point.y, pinchActive ? 18 : 12, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
   ctx.beginPath();
-  ctx.arc(point.x, point.y, 3, 0, Math.PI * 2);
+  ctx.arc(point.x, point.y, 3.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -447,8 +440,8 @@ function drawHandSkeleton(hand, options = {}) {
     const a = points[start];
     const b = points[end];
     const avgDepth = ((a.depth ?? 1) + (b.depth ?? 1)) / 2;
-    ctx.lineWidth = (strong ? 2.8 : 1.35) * avgDepth;
-    ctx.strokeStyle = `hsla(${hueBase + start * 5}, 100%, 72%, ${strong ? 0.38 : 0.2})`;
+    ctx.lineWidth = (strong ? 2.8 : 1.45) * avgDepth;
+    ctx.strokeStyle = `hsla(${hueBase + start * 5}, 100%, 72%, ${strong ? 0.42 : 0.26})`;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -475,9 +468,9 @@ function drawHandSkeleton(hand, options = {}) {
 
   points.forEach((point, index) => {
     const isTip = FINGER_TIPS.includes(index);
-    const radius = (isTip ? 4.6 : 2.6) * point.depth * (strong ? 1.16 : 1);
+    const radius = (isTip ? 4.8 : 2.8) * point.depth * (strong ? 1.16 : 1);
     const hue = hueBase + index * 9;
-    ctx.fillStyle = `hsla(${hue}, 100%, ${isTip ? 82 : 74}%, ${isTip ? 0.86 : 0.54})`;
+    ctx.fillStyle = `hsla(${hue}, 100%, ${isTip ? 84 : 76}%, ${isTip ? 0.9 : 0.6})`;
     ctx.beginPath();
     ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
     ctx.fill();
@@ -487,8 +480,6 @@ function drawHandSkeleton(hand, options = {}) {
 }
 
 function drawLiquidHand(hand) {
-  if (settings.lowPower) return;
-
   const tips = FINGER_TIPS.map((tip) => hand.points[tip]);
   const palm = hand.points[PALM];
 
@@ -496,8 +487,8 @@ function drawLiquidHand(hand) {
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = 5 * settings.glow;
-  ctx.strokeStyle = `hsla(${hueBase}, 100%, 70%, 0.12)`;
+  ctx.lineWidth = settings.lowPower ? 2.5 : 5 * settings.glow;
+  ctx.strokeStyle = `hsla(${hueBase}, 100%, 70%, ${settings.lowPower ? 0.12 : 0.16})`;
 
   for (const tip of tips) {
     ctx.beginPath();
@@ -518,7 +509,7 @@ function updateModeEffects() {
 
     if (settings.mode === 'liquid') {
       spawnTrail(indexPoint, indexSpeed, hueBase);
-      if (!settings.lowPower) addRibbonSegment(previousIndex, indexPoint, hueBase, 16);
+      addRibbonSegment(previousIndex, indexPoint, hueBase, 18);
       drawLiquidHand(hand);
     }
 
@@ -528,15 +519,18 @@ function updateModeEffects() {
         const point = hand.points[tip];
         const prev = getPreviousPoint(key);
         const speed = distance(point, prev);
+        const hue = hueBase + tipIndex * 32 + hand.index * 18;
         spawnParticle(point, {
-          amount: 1.6,
+          amount: 2.6,
           speed,
-          hue: hueBase + tipIndex * 32,
-          spread: 4,
-          size: [2.6, 8.5],
-          velocity: [0.08, 1.7],
+          hue,
+          spread: 5,
+          size: [3.2, 11],
+          velocity: [0.08, 2.1],
         });
+        addRibbonSegment(prev, point, hue, 13);
       });
+      drawLiquidHand(hand);
     }
 
     if (settings.mode === 'skeleton3d') {
@@ -546,12 +540,12 @@ function updateModeEffects() {
         const key = `${hand.index}-${tip}`;
         const speed = distance(point, getPreviousPoint(key));
         spawnParticle(point, {
-          amount: 0.8,
+          amount: 1.2,
           speed,
           hue: 190 + tipIndex * 38,
           spread: 3,
-          size: [2.2, 6.8],
-          velocity: [0.05, 1.1],
+          size: [2.5, 8],
+          velocity: [0.05, 1.3],
         });
       });
     }
@@ -562,14 +556,15 @@ function updateModeEffects() {
         const point = hand.points[tip];
         const prev = getPreviousPoint(key);
         const speed = distance(point, prev);
-        addRibbonSegment(prev, point, hueBase + tipIndex * 34, 16);
+        const hue = hueBase + tipIndex * 34 + hand.index * 18;
+        addRibbonSegment(prev, point, hue, 18);
         spawnParticle(point, {
-          amount: settings.lowPower ? 0.8 : 1.6,
+          amount: settings.lowPower ? 1.1 : 1.9,
           speed,
-          hue: hueBase + tipIndex * 34,
+          hue,
           spread: 3,
-          size: [2.2, 7],
-          velocity: [0.06, 1.4],
+          size: [2.4, 7.8],
+          velocity: [0.06, 1.5],
         });
       });
     }
@@ -580,12 +575,12 @@ function updateModeEffects() {
         if (settings.lowPower && landmarkIndex % 4 !== 0 && !FINGER_TIPS.includes(landmarkIndex)) return;
         if (!settings.lowPower && landmarkIndex % 2 !== 0 && !FINGER_TIPS.includes(landmarkIndex)) return;
         spawnParticle(point, {
-          amount: 0.45,
+          amount: 0.65,
           hue: 185 + landmarkIndex * 8,
           spread: 1.5,
-          size: [1.6, 4.8],
-          velocity: [0.04, 0.45],
-          life: [0.3, 0.62],
+          size: [1.8, 5.4],
+          velocity: [0.04, 0.55],
+          life: [0.34, 0.68],
         });
       });
     }
@@ -596,13 +591,13 @@ function updateModeEffects() {
         const key = `${hand.index}-${tip}`;
         const speed = distance(point, getPreviousPoint(key));
         spawnParticle(point, {
-          amount: 1.2,
+          amount: 1.6,
           speed,
-          hue: 210 + tipIndex * 28,
+          hue: 210 + tipIndex * 28 + hand.index * 18,
           spread: 8,
-          size: [2.6, 9.5],
-          velocity: [0.18, 1.8],
-          life: [0.52, 0.86],
+          size: [2.8, 10],
+          velocity: [0.18, 2],
+          life: [0.52, 0.9],
         });
       });
     }
@@ -679,7 +674,7 @@ async function setupHandLandmarker() {
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',
-    numHands: settings.lowPower ? 1 : 2,
+    numHands: 2,
     minHandDetectionConfidence: 0.55,
     minHandPresenceConfidence: 0.55,
     minTrackingConfidence: 0.55,
@@ -725,8 +720,8 @@ function maybeEnableAutoLowPower(deltaMs) {
   if (!settings.lowPower && frameCostEma > 34 && !autoLowPowerNoticeShown) {
     settings.lowPower = true;
     lowPower.checked = true;
-    particles.splice(0, Math.max(0, particles.length - 300));
-    ribbons.splice(0, Math.max(0, ribbons.length - 60));
+    particles.splice(0, Math.max(0, particles.length - 420));
+    ribbons.splice(0, Math.max(0, ribbons.length - 100));
     resizeCanvas();
     setStatus('Performance mode on');
     autoLowPowerNoticeShown = true;
@@ -844,8 +839,8 @@ function bindControls() {
     settings.lowPower = lowPower.checked;
     resizeCanvas();
     if (settings.lowPower) {
-      particles.splice(0, Math.max(0, particles.length - 320));
-      ribbons.splice(0, Math.max(0, ribbons.length - 60));
+      particles.splice(0, Math.max(0, particles.length - 420));
+      ribbons.splice(0, Math.max(0, ribbons.length - 100));
     }
   });
 
