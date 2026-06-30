@@ -69,32 +69,32 @@
           </div>
 
           <p class="mode-description" id="modeDescription">
-            Index finger paints soft liquid trails. Pinch to burst.
+            Index finger paints lightweight liquid trails. Pinch to burst.
           </p>
 
           <div class="control-group">
-            <label for="cameraOpacity">Camera opacity <span id="cameraOpacityValue">42%</span></label>
-            <input id="cameraOpacity" type="range" min="0" max="100" value="42" />
+            <label for="cameraOpacity">Camera opacity <span id="cameraOpacityValue">36%</span></label>
+            <input id="cameraOpacity" type="range" min="0" max="100" value="36" />
           </div>
 
           <div class="control-group">
-            <label for="particleIntensity">Particle intensity <span id="particleIntensityValue">125%</span></label>
-            <input id="particleIntensity" type="range" min="20" max="220" value="125" />
+            <label for="particleIntensity">Particle intensity <span id="particleIntensityValue">75%</span></label>
+            <input id="particleIntensity" type="range" min="20" max="160" value="75" />
           </div>
 
           <div class="control-group">
-            <label for="glowStrength">Glow strength <span id="glowStrengthValue">120%</span></label>
-            <input id="glowStrength" type="range" min="30" max="220" value="120" />
+            <label for="glowStrength">Glow strength <span id="glowStrengthValue">80%</span></label>
+            <input id="glowStrength" type="range" min="30" max="150" value="80" />
           </div>
 
           <div class="control-group">
-            <label for="trailLife">Trail life <span id="trailLifeValue">110%</span></label>
-            <input id="trailLife" type="range" min="35" max="220" value="110" />
+            <label for="trailLife">Trail life <span id="trailLifeValue">85%</span></label>
+            <input id="trailLife" type="range" min="35" max="160" value="85" />
           </div>
 
           <div class="control-group">
-            <label for="smoothing">Smoothing <span id="smoothingValue">28%</span></label>
-            <input id="smoothing" type="range" min="8" max="60" value="28" />
+            <label for="smoothing">Smoothing <span id="smoothingValue">24%</span></label>
+            <input id="smoothing" type="range" min="8" max="60" value="24" />
           </div>
 
           <div class="toggle-row">
@@ -108,6 +108,11 @@
               <span></span>
               Mirror
             </label>
+            <label class="switch">
+              <input id="lowPower" type="checkbox" checked />
+              <span></span>
+              Performance
+            </label>
           </div>
 
           <button id="clearButton" class="ghost-button" type="button">Clear particles</button>
@@ -120,14 +125,14 @@
             Move your fingers to bend liquid light. Pinch your thumb and index finger to explode the flow.
           </p>
           <button id="startButton" type="button">Start FingerPlay</button>
-          <small>Works best on HTTPS or localhost. Allow camera permission when prompted.</small>
+          <small>Performance mode is on by default to keep your Mac smooth.</small>
         </div>
 
         <footer class="hint-bar glass-card">
           <span>☝️ index = draw</span>
           <span>🖐️ all fingers = multi trail</span>
           <span>🤏 pinch = burst</span>
-          <span>⚙️ tune liquid tools</span>
+          <span>⚙️ performance mode = smoother</span>
         </footer>
       </section>
     </main>
