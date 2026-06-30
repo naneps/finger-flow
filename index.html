@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#060711" />
+    <title>Finger Flow</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="stage" aria-label="Finger Flow camera stage">
+        <video id="camera" autoplay playsinline muted></video>
+        <canvas id="scene"></canvas>
+
+        <div class="vignette"></div>
+
+        <div class="hud top-left">
+          <div class="brand-dot"></div>
+          <div>
+            <p class="eyebrow">Finger Flow</p>
+            <h1>Move your finger. Make it glow.</h1>
+          </div>
+        </div>
+
+        <div class="hud top-right stats">
+          <span id="handStatus">Camera idle</span>
+          <span id="particleCount">0 particles</span>
+        </div>
+
+        <div class="start-panel" id="startPanel">
+          <p class="eyebrow">Camera + hand tracking</p>
+          <h2>Draw with your index finger</h2>
+          <p>
+            Pinch your thumb and index finger to explode particles. Move faster for longer trails.
+          </p>
+          <button id="startButton" type="button">Start tracking</button>
+          <small>Best on HTTPS or localhost.</small>
+        </div>
+
+        <div class="hint-bar">
+          <span>☝️ index finger = trail</span>
+          <span>🤏 pinch = burst</span>
+          <span>🖐️ open hand = smooth flow</span>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
