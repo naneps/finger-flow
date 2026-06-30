@@ -1,0 +1,17 @@
+{
+  "name": "finger-flow",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A satisfying webcam hand-tracking particle toy powered by MediaPipe.",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {}
+}
