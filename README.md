@@ -1,12 +1,12 @@
-# Finger Flow
+# FingerPlay
 
-A satisfying webcam hand-tracking particle toy powered by **MediaPipe Hand Landmarker**, **Vite**, and **HTML Canvas**.
+A liquid glass webcam playground powered by **MediaPipe Hand Landmarker**, **Vite**, and **HTML Canvas**.
 
-Move your index finger to draw glowing particle trails. Pinch your thumb and index finger to trigger a particle burst.
+Move your fingers to bend glowing liquid particles. Pinch your thumb and index finger to trigger a burst.
 
 ## Demo
 
-After GitHub Pages finishes deploying, the app should be available at:
+After GitHub Pages finishes deploying, the app is available at:
 
 ```txt
 https://naneps.github.io/finger-flow/
@@ -16,14 +16,26 @@ https://naneps.github.io/finger-flow/
 
 ## Features
 
+- Liquid glass UI theme
 - Webcam camera preview
+- Adjustable camera opacity
 - Mirrored front-camera interaction
 - Real-time hand tracking with MediaPipe
-- Index-finger particle brush
-- Pinch gesture burst effect
-- Glowing particles with satisfying fading trails
+- Pinch gesture particle burst
+- Particle intensity, glow, trail life, and smoothing controls
+- Skeleton and mirror toggles
+- Clear particles button
 - Responsive desktop/mobile layout
 - GitHub Pages deployment workflow
+
+## Visual modes
+
+- **Liquid Flow** — index finger paints liquid trails
+- **All Fingers** — every fingertip becomes a brush
+- **3D Hand** — depth-reactive glowing hand rig
+- **Liquid Ribbons** — fingers draw soft ribbon strokes
+- **Constellation** — hand landmarks become a star map
+- **Gravity Orbs** — particles orbit around fingertips
 
 ## Run locally
 
