@@ -4,18 +4,86 @@ import './styles.css';
 const video = document.querySelector('#camera');
 const canvas = document.querySelector('#scene');
 const ctx = canvas.getContext('2d');
+
 const startButton = document.querySelector('#startButton');
 const startPanel = document.querySelector('#startPanel');
 const handStatus = document.querySelector('#handStatus');
 const particleCount = document.querySelector('#particleCount');
+const modeTitle = document.querySelector('#modeTitle');
+const modeDescription = document.querySelector('#modeDescription');
+const modeButtons = [...document.querySelectorAll('[data-mode]')];
+
+const cameraOpacity = document.querySelector('#cameraOpacity');
+const particleIntensity = document.querySelector('#particleIntensity');
+const glowStrength = document.querySelector('#glowStrength');
+const trailLife = document.querySelector('#trailLife');
+const smoothing = document.querySelector('#smoothing');
+const showSkeleton = document.querySelector('#showSkeleton');
+const mirrorCamera = document.querySelector('#mirrorCamera');
+const clearButton = document.querySelector('#clearButton');
+
+const cameraOpacityValue = document.querySelector('#cameraOpacityValue');
+const particleIntensityValue = document.querySelector('#particleIntensityValue');
+const glowStrengthValue = document.querySelector('#glowStrengthValue');
+const trailLifeValue = document.querySelector('#trailLifeValue');
+const smoothingValue = document.querySelector('#smoothingValue');
+
+const FINGER_TIPS = [4, 8, 12, 16, 20];
+const INDEX_TIP = 8;
+const THUMB_TIP = 4;
+const PALM = 0;
+const HAND_CONNECTIONS = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  [13, 17], [0, 17], [17, 18], [18, 19], [19, 20],
+];
+
+const MODE_META = {
+  liquid: {
+    title: 'Liquid Flow',
+    description: 'Index finger paints soft liquid trails. Pinch to burst.',
+  },
+  allFingers: {
+    title: 'All Fingers',
+    description: 'Every fingertip becomes a brush, so both hands can paint together.',
+  },
+  skeleton3d: {
+    title: '3D Hand',
+    description: 'Landmarks react to depth, making the hand feel like a glowing 3D rig.',
+  },
+  ribbons: {
+    title: 'Liquid Ribbons',
+    description: 'Finger movement creates smooth ribbon strokes that melt into particles.',
+  },
+  constellation: {
+    title: 'Constellation',
+    description: 'All hand landmarks connect into a living star map.',
+  },
+  gravity: {
+    title: 'Gravity Orbs',
+    description: 'Particles orbit and get pulled by your fingertips like little planets.',
+  },
+};
+
+const settings = {
+  mode: 'liquid',
+  cameraOpacity: 0.42,
+  intensity: 1.25,
+  glow: 1.2,
+  trailLife: 1.1,
+  smoothing: 0.28,
+  showSkeleton: true,
+  mirror: true,
+};
 
 const CONFIG = {
-  maxParticles: 950,
-  trailSpawn: 5,
-  burstSpawn: 90,
+  maxParticles: 1500,
+  baseTrailSpawn: 5,
+  burstSpawn: 105,
   pinchThreshold: 0.055,
-  pinchCooldownMs: 320,
-  handSmoothness: 0.28,
+  pinchCooldownMs: 280,
 };
 
 let handLandmarker;
@@ -25,11 +93,16 @@ let lastVideoTime = -1;
 let lastFrameTime = performance.now();
 let lastPinchTime = 0;
 let particles = [];
-let handPoint = null;
-let smoothPoint = null;
-let previousPoint = null;
+let ribbons = [];
+let detectedHands = [];
+let smoothLandmarkMap = new Map();
+let previousLandmarkMap = new Map();
 let pinchActive = false;
-let hueBase = 190;
+let hueBase = 188;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function setStatus(message) {
   handStatus.textContent = message;
@@ -41,7 +114,6 @@ function resizeCanvas() {
 
   canvas.width = Math.floor(rect.width * dpr);
   canvas.height = Math.floor(rect.height * dpr);
-
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -50,18 +122,21 @@ function randomBetween(min, max) {
 }
 
 function distance(a, b) {
+  if (!a || !b) return 0;
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 function mirroredX(normalizedX) {
-  return (1 - normalizedX) * canvas.clientWidth;
+  return settings.mirror ? (1 - normalizedX) * canvas.clientWidth : normalizedX * canvas.clientWidth;
 }
 
 function toCanvasPoint(landmark) {
+  const z = landmark.z ?? 0;
   return {
     x: mirroredX(landmark.x),
     y: landmark.y * canvas.clientHeight,
-    z: landmark.z ?? 0,
+    z,
+    depth: clamp(1 - z * 4.2, 0.48, 2.35),
   };
 }
 
@@ -75,40 +150,92 @@ function lerpPoint(a, b, t) {
     x: lerp(a.x, b.x, t),
     y: lerp(a.y, b.y, t),
     z: lerp(a.z ?? 0, b.z ?? 0, t),
+    depth: lerp(a.depth ?? 1, b.depth ?? 1, t),
   };
 }
 
-function spawnTrail(point, speed) {
-  const intensity = Math.min(2.8, 0.7 + speed * 0.018);
-  const amount = Math.floor(CONFIG.trailSpawn * intensity);
-  hueBase = (hueBase + 0.7 + speed * 0.02) % 360;
+function getPreviousPoint(key) {
+  return previousLandmarkMap.get(key) ?? null;
+}
 
-  for (let i = 0; i < amount; i += 1) {
-    const angle = randomBetween(0, Math.PI * 2);
-    const drift = randomBetween(0.2, 2.8 + speed * 0.018);
-    const size = randomBetween(4, 14) * Math.min(1.8, intensity);
+function savePreviousPoint(key, point) {
+  previousLandmarkMap.set(key, { ...point });
+}
+
+function getPrimaryIndexPoint() {
+  return detectedHands[0]?.points?.[INDEX_TIP] ?? null;
+}
+
+function getAttractors() {
+  if (!detectedHands.length) return [];
+
+  if (settings.mode === 'gravity') {
+    return detectedHands.flatMap((hand) => FINGER_TIPS.map((tip) => hand.points[tip]).filter(Boolean));
+  }
+
+  if (settings.mode === 'allFingers' || settings.mode === 'ribbons') {
+    return detectedHands.flatMap((hand) => FINGER_TIPS.map((tip) => hand.points[tip]).filter(Boolean));
+  }
+
+  return [getPrimaryIndexPoint()].filter(Boolean);
+}
+
+function spawnParticle(point, options = {}) {
+  const {
+    amount = 1,
+    speed = 0,
+    spread = 9,
+    size = [4, 15],
+    velocity = [0.2, 3.2],
+    hue = hueBase,
+    directional = null,
+    life = [0.58, 1],
+  } = options;
+
+  const scaledAmount = Math.max(1, Math.floor(amount * settings.intensity));
+
+  for (let i = 0; i < scaledAmount; i += 1) {
+    const angle = directional ?? randomBetween(0, Math.PI * 2);
+    const drift = randomBetween(velocity[0], velocity[1] + speed * 0.018);
+    const radius = randomBetween(size[0], size[1]) * clamp(settings.glow, 0.5, 1.8);
 
     particles.push({
-      x: point.x + randomBetween(-8, 8),
-      y: point.y + randomBetween(-8, 8),
-      vx: Math.cos(angle) * drift + (previousPoint ? (point.x - previousPoint.x) * 0.018 : 0),
-      vy: Math.sin(angle) * drift + (previousPoint ? (point.y - previousPoint.y) * 0.018 : 0),
-      size,
-      life: randomBetween(0.58, 1),
-      decay: randomBetween(0.008, 0.018),
-      hue: (hueBase + randomBetween(-34, 54)) % 360,
+      x: point.x + randomBetween(-spread, spread),
+      y: point.y + randomBetween(-spread, spread),
+      vx: Math.cos(angle) * drift + randomBetween(-0.4, 0.4),
+      vy: Math.sin(angle) * drift + randomBetween(-0.4, 0.4),
+      size: radius,
+      life: randomBetween(life[0], life[1]),
+      decay: randomBetween(0.008, 0.018) / settings.trailLife,
+      hue: (hue + randomBetween(-34, 56)) % 360,
       spin: randomBetween(-0.035, 0.035),
       angle,
     });
   }
 }
 
+function spawnTrail(point, speed, hue = hueBase) {
+  const intensity = Math.min(3.3, 0.7 + speed * 0.018);
+  const amount = CONFIG.baseTrailSpawn * intensity;
+  hueBase = (hueBase + 0.7 + speed * 0.018) % 360;
+
+  spawnParticle(point, {
+    amount,
+    speed,
+    hue,
+    spread: 7 + speed * 0.015,
+    size: [4, 14],
+    velocity: [0.1, 2.7],
+  });
+}
+
 function spawnBurst(point) {
   hueBase = (hueBase + 46) % 360;
+  const amount = Math.floor(CONFIG.burstSpawn * settings.intensity);
 
-  for (let i = 0; i < CONFIG.burstSpawn; i += 1) {
-    const angle = (i / CONFIG.burstSpawn) * Math.PI * 2 + randomBetween(-0.17, 0.17);
-    const velocity = randomBetween(2.4, 11.5);
+  for (let i = 0; i < amount; i += 1) {
+    const angle = (i / amount) * Math.PI * 2 + randomBetween(-0.18, 0.18);
+    const velocity = randomBetween(2.6, 12.5);
     const warmHue = i % 3 === 0 ? 318 : i % 3 === 1 ? 190 : 52;
 
     particles.push({
@@ -116,9 +243,9 @@ function spawnBurst(point) {
       y: point.y,
       vx: Math.cos(angle) * velocity,
       vy: Math.sin(angle) * velocity,
-      size: randomBetween(5, 22),
+      size: randomBetween(5, 24) * settings.glow,
       life: randomBetween(0.72, 1),
-      decay: randomBetween(0.01, 0.022),
+      decay: randomBetween(0.01, 0.022) / settings.trailLife,
       hue: warmHue + randomBetween(-18, 18),
       spin: randomBetween(-0.06, 0.06),
       angle,
@@ -126,62 +253,142 @@ function spawnBurst(point) {
   }
 }
 
+function addRibbonSegment(from, to, hue, width = 18) {
+  if (!from || !to) return;
+  const speed = distance(from, to);
+  if (speed < 0.5) return;
+
+  ribbons.push({
+    x1: from.x,
+    y1: from.y,
+    x2: to.x,
+    y2: to.y,
+    cx: (from.x + to.x) / 2 + randomBetween(-18, 18),
+    cy: (from.y + to.y) / 2 + randomBetween(-18, 18),
+    hue,
+    width: clamp(width + speed * 0.045, 8, 34),
+    life: 1,
+    decay: randomBetween(0.018, 0.032) / settings.trailLife,
+  });
+
+  if (ribbons.length > 280) {
+    ribbons.splice(0, ribbons.length - 280);
+  }
+}
+
 function drawGlowCircle(x, y, radius, hue, alpha) {
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  gradient.addColorStop(0, `hsla(${hue}, 100%, 72%, ${alpha})`);
-  gradient.addColorStop(0.4, `hsla(${hue + 20}, 100%, 58%, ${alpha * 0.38})`);
+  const finalRadius = radius * settings.glow;
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, finalRadius);
+  gradient.addColorStop(0, `hsla(${hue}, 100%, 75%, ${alpha})`);
+  gradient.addColorStop(0.38, `hsla(${hue + 20}, 100%, 58%, ${alpha * 0.38})`);
   gradient.addColorStop(1, `hsla(${hue}, 100%, 48%, 0)`);
 
   ctx.fillStyle = gradient;
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.arc(x, y, finalRadius, 0, Math.PI * 2);
   ctx.fill();
 }
 
-function updateAndDrawParticles(delta) {
+function drawIdleMist(delta) {
+  const time = performance.now() * 0.0001;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
 
-  const target = smoothPoint;
+  for (let i = 0; i < 5; i += 1) {
+    const x = canvas.clientWidth * (0.14 + i * 0.19 + Math.sin(time * 8 + i) * 0.035);
+    const y = canvas.clientHeight * (0.25 + Math.cos(time * 7 + i * 1.8) * 0.075);
+    drawGlowCircle(x, y, 88 + Math.sin(time * 16 + i) * 24, 188 + i * 38, 0.022 * delta);
+  }
+
+  ctx.restore();
+}
+
+function drawRibbons(delta) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+
+  for (const ribbon of ribbons) {
+    ribbon.life -= ribbon.decay * delta;
+    const alpha = clamp(ribbon.life, 0, 1);
+
+    ctx.lineWidth = ribbon.width * alpha;
+    ctx.strokeStyle = `hsla(${ribbon.hue}, 100%, 70%, ${alpha * 0.34})`;
+    ctx.shadowBlur = 22 * settings.glow;
+    ctx.shadowColor = `hsla(${ribbon.hue}, 100%, 65%, ${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(ribbon.x1, ribbon.y1);
+    ctx.quadraticCurveTo(ribbon.cx, ribbon.cy, ribbon.x2, ribbon.y2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  ribbons = ribbons.filter((ribbon) => ribbon.life > 0.025);
+}
+
+function updateAndDrawParticles(delta) {
+  const attractors = getAttractors();
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
 
   for (const particle of particles) {
-    if (target) {
-      const dx = target.x - particle.x;
-      const dy = target.y - particle.y;
-      const pull = pinchActive ? 0.0018 : 0.00055;
+    if (attractors.length) {
+      let nearest = attractors[0];
+      let nearestDistance = distance(particle, nearest);
+
+      for (let i = 1; i < attractors.length; i += 1) {
+        const candidateDistance = distance(particle, attractors[i]);
+        if (candidateDistance < nearestDistance) {
+          nearest = attractors[i];
+          nearestDistance = candidateDistance;
+        }
+      }
+
+      const dx = nearest.x - particle.x;
+      const dy = nearest.y - particle.y;
+      const pull = settings.mode === 'gravity' ? 0.0024 : pinchActive ? 0.0018 : 0.00055;
       particle.vx += dx * pull;
       particle.vy += dy * pull;
+
+      if (settings.mode === 'gravity') {
+        particle.vx += -dy * 0.0007;
+        particle.vy += dx * 0.0007;
+      }
     }
 
     particle.angle += particle.spin * delta;
-    particle.vx *= 0.986;
-    particle.vy *= 0.986;
-    particle.vy += 0.008 * delta;
+    particle.vx *= settings.mode === 'gravity' ? 0.992 : 0.986;
+    particle.vy *= settings.mode === 'gravity' ? 0.992 : 0.986;
+    particle.vy += (settings.mode === 'gravity' ? -0.001 : 0.008) * delta;
     particle.x += particle.vx * delta;
     particle.y += particle.vy * delta;
     particle.life -= particle.decay * delta;
     particle.size *= 0.993;
 
     const alpha = Math.max(0, particle.life);
-    const radius = particle.size * (1.6 + alpha * 1.7);
+    const radius = particle.size * (1.6 + alpha * 1.6);
 
     drawGlowCircle(particle.x, particle.y, radius, particle.hue, alpha * 0.42);
 
-    ctx.fillStyle = `hsla(${particle.hue}, 100%, 82%, ${alpha})`;
+    ctx.shadowBlur = 12 * settings.glow;
+    ctx.shadowColor = `hsla(${particle.hue}, 100%, 74%, ${alpha})`;
+    ctx.fillStyle = `hsla(${particle.hue}, 100%, 84%, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(particle.x, particle.y, Math.max(0.7, particle.size * 0.24), 0, Math.PI * 2);
+    ctx.arc(particle.x, particle.y, Math.max(0.7, particle.size * 0.23), 0, Math.PI * 2);
     ctx.fill();
   }
 
   ctx.restore();
 
-  particles = particles.filter((particle) => particle.life > 0.02 && particle.size > 0.6);
+  particles = particles.filter((particle) => particle.life > 0.02 && particle.size > 0.55);
 
-  if (particles.length > CONFIG.maxParticles) {
-    particles.splice(0, particles.length - CONFIG.maxParticles);
+  const maxParticles = Math.floor(CONFIG.maxParticles * clamp(settings.intensity, 0.5, 1.8));
+  if (particles.length > maxParticles) {
+    particles.splice(0, particles.length - maxParticles);
   }
 
-  particleCount.textContent = `${particles.length} particles`;
+  particleCount.textContent = `${particles.length}`;
 }
 
 function drawFingerCursor(point) {
@@ -189,12 +396,12 @@ function drawFingerCursor(point) {
 
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  drawGlowCircle(point.x, point.y, pinchActive ? 62 : 42, pinchActive ? 315 : hueBase, 0.54);
+  drawGlowCircle(point.x, point.y, pinchActive ? 66 : 44, pinchActive ? 315 : hueBase, 0.56);
 
-  ctx.strokeStyle = pinchActive ? 'rgba(255, 160, 232, 0.92)' : 'rgba(127, 240, 255, 0.86)';
+  ctx.strokeStyle = pinchActive ? 'rgba(255, 160, 232, 0.95)' : 'rgba(127, 240, 255, 0.9)';
   ctx.lineWidth = pinchActive ? 3 : 2;
   ctx.beginPath();
-  ctx.arc(point.x, point.y, pinchActive ? 20 : 13, 0, Math.PI * 2);
+  ctx.arc(point.x, point.y, pinchActive ? 21 : 13, 0, Math.PI * 2);
   ctx.stroke();
 
   ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
@@ -204,52 +411,234 @@ function drawFingerCursor(point) {
   ctx.restore();
 }
 
-function drawIdleMist(delta) {
-  const time = performance.now() * 0.0001;
+function drawHandSkeleton(hand, options = {}) {
+  const { strong = false, constellation = false } = options;
+  const points = hand.points;
+
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
-  for (let i = 0; i < 4; i += 1) {
-    const x = canvas.clientWidth * (0.18 + i * 0.22 + Math.sin(time * 8 + i) * 0.04);
-    const y = canvas.clientHeight * (0.28 + Math.cos(time * 7 + i * 1.8) * 0.08);
-    drawGlowCircle(x, y, 90 + Math.sin(time * 16 + i) * 22, 188 + i * 38, 0.024 * delta);
+  for (const [start, end] of HAND_CONNECTIONS) {
+    const a = points[start];
+    const b = points[end];
+    const avgDepth = ((a.depth ?? 1) + (b.depth ?? 1)) / 2;
+    ctx.lineWidth = (strong ? 3.4 : 1.6) * avgDepth;
+    ctx.strokeStyle = `hsla(${hueBase + start * 5}, 100%, 72%, ${strong ? 0.42 : 0.24})`;
+    ctx.shadowBlur = strong ? 18 : 10;
+    ctx.shadowColor = `hsla(${hueBase + start * 5}, 100%, 65%, 0.72)`;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  if (constellation) {
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const a = points[i];
+        const b = points[j];
+        const d = distance(a, b);
+        if (d > 78) continue;
+        const alpha = (1 - d / 78) * 0.17;
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = `hsla(${hueBase + i * 7}, 100%, 76%, ${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  points.forEach((point, index) => {
+    const isTip = FINGER_TIPS.includes(index);
+    const radius = (isTip ? 5.8 : 3.2) * point.depth * (strong ? 1.28 : 1);
+    const hue = hueBase + index * 9;
+    drawGlowCircle(point.x, point.y, radius * 4.1, hue, isTip ? 0.18 : 0.09);
+    ctx.fillStyle = `hsla(${hue}, 100%, ${isTip ? 82 : 74}%, ${isTip ? 0.92 : 0.62})`;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+function drawLiquidHand(hand) {
+  const tips = FINGER_TIPS.map((tip) => hand.points[tip]);
+  const palm = hand.points[PALM];
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 7 * settings.glow;
+  ctx.strokeStyle = `hsla(${hueBase}, 100%, 70%, 0.16)`;
+  ctx.shadowBlur = 22 * settings.glow;
+  ctx.shadowColor = `hsla(${hueBase}, 100%, 65%, 0.9)`;
+
+  for (const tip of tips) {
+    ctx.beginPath();
+    ctx.moveTo(palm.x, palm.y);
+    ctx.quadraticCurveTo((palm.x + tip.x) / 2, palm.y - 28, tip.x, tip.y);
+    ctx.stroke();
   }
 
   ctx.restore();
 }
 
-function readGesture(results) {
-  const firstHand = results.landmarks?.[0];
+function updateModeEffects() {
+  for (const hand of detectedHands) {
+    const indexPoint = hand.points[INDEX_TIP];
+    const indexKey = `${hand.index}-${INDEX_TIP}`;
+    const previousIndex = getPreviousPoint(indexKey);
+    const indexSpeed = distance(indexPoint, previousIndex);
 
-  if (!firstHand) {
-    handPoint = null;
+    if (settings.mode === 'liquid') {
+      spawnTrail(indexPoint, indexSpeed, hueBase);
+      addRibbonSegment(previousIndex, indexPoint, hueBase, 20);
+      drawLiquidHand(hand);
+    }
+
+    if (settings.mode === 'allFingers') {
+      FINGER_TIPS.forEach((tip, tipIndex) => {
+        const key = `${hand.index}-${tip}`;
+        const point = hand.points[tip];
+        const prev = getPreviousPoint(key);
+        const speed = distance(point, prev);
+        spawnTrail(point, speed, hueBase + tipIndex * 32);
+      });
+    }
+
+    if (settings.mode === 'skeleton3d') {
+      drawHandSkeleton(hand, { strong: true });
+      FINGER_TIPS.forEach((tip, tipIndex) => {
+        const point = hand.points[tip];
+        const key = `${hand.index}-${tip}`;
+        const speed = distance(point, getPreviousPoint(key));
+        spawnParticle(point, {
+          amount: 1.6,
+          speed,
+          hue: 190 + tipIndex * 38,
+          spread: 4,
+          size: [2.5, 8],
+          velocity: [0.1, 1.6],
+        });
+      });
+    }
+
+    if (settings.mode === 'ribbons') {
+      FINGER_TIPS.forEach((tip, tipIndex) => {
+        const key = `${hand.index}-${tip}`;
+        const point = hand.points[tip];
+        const prev = getPreviousPoint(key);
+        const speed = distance(point, prev);
+        addRibbonSegment(prev, point, hueBase + tipIndex * 34, 22);
+        spawnParticle(point, {
+          amount: 2.5,
+          speed,
+          hue: hueBase + tipIndex * 34,
+          spread: 5,
+          size: [3, 11],
+          velocity: [0.1, 2.1],
+        });
+      });
+    }
+
+    if (settings.mode === 'constellation') {
+      drawHandSkeleton(hand, { constellation: true });
+      hand.points.forEach((point, landmarkIndex) => {
+        if (landmarkIndex % 2 !== 0 && !FINGER_TIPS.includes(landmarkIndex)) return;
+        spawnParticle(point, {
+          amount: 0.9,
+          hue: 185 + landmarkIndex * 8,
+          spread: 2,
+          size: [1.8, 6.4],
+          velocity: [0.05, 0.8],
+          life: [0.38, 0.76],
+        });
+      });
+    }
+
+    if (settings.mode === 'gravity') {
+      FINGER_TIPS.forEach((tip, tipIndex) => {
+        const point = hand.points[tip];
+        const key = `${hand.index}-${tip}`;
+        const speed = distance(point, getPreviousPoint(key));
+        spawnParticle(point, {
+          amount: 2.2,
+          speed,
+          hue: 210 + tipIndex * 28,
+          spread: 12,
+          size: [3, 13],
+          velocity: [0.3, 2.6],
+          life: [0.7, 1],
+        });
+      });
+    }
+  }
+}
+
+function saveCurrentLandmarksAsPrevious() {
+  for (const hand of detectedHands) {
+    hand.points.forEach((point, landmarkIndex) => {
+      savePreviousPoint(`${hand.index}-${landmarkIndex}`, point);
+    });
+  }
+}
+
+function readGesture(results) {
+  const rawHands = results.landmarks ?? [];
+
+  if (!rawHands.length) {
+    detectedHands = [];
     pinchActive = false;
     setStatus(cameraReady ? 'Show your hand' : 'Camera idle');
     return;
   }
 
-  const indexTip = firstHand[8];
-  const thumbTip = firstHand[4];
-  const indexPoint = toCanvasPoint(indexTip);
-  const thumbPoint = toCanvasPoint(thumbTip);
-  const normalizedPinchDistance = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+  const nextSmoothMap = new Map();
+  detectedHands = rawHands.map((landmarks, handIndex) => {
+    const points = landmarks.map((landmark, landmarkIndex) => {
+      const key = `${handIndex}-${landmarkIndex}`;
+      const rawPoint = toCanvasPoint(landmark);
+      const smoothed = lerpPoint(smoothLandmarkMap.get(key), rawPoint, settings.smoothing);
+      nextSmoothMap.set(key, smoothed);
+      return smoothed;
+    });
 
-  handPoint = indexPoint;
-  smoothPoint = lerpPoint(smoothPoint, handPoint, CONFIG.handSmoothness);
+    return {
+      index: handIndex,
+      raw: landmarks,
+      points,
+    };
+  });
+
+  smoothLandmarkMap = nextSmoothMap;
+
+  const firstRawHand = rawHands[0];
+  const indexTip = firstRawHand[INDEX_TIP];
+  const thumbTip = firstRawHand[THUMB_TIP];
+  const normalizedPinchDistance = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
   pinchActive = normalizedPinchDistance < CONFIG.pinchThreshold;
 
   const now = performance.now();
   if (pinchActive && now - lastPinchTime > CONFIG.pinchCooldownMs) {
-    const centerPoint = {
+    const indexPoint = detectedHands[0].points[INDEX_TIP];
+    const thumbPoint = detectedHands[0].points[THUMB_TIP];
+    spawnBurst({
       x: (indexPoint.x + thumbPoint.x) / 2,
       y: (indexPoint.y + thumbPoint.y) / 2,
       z: 0,
-    };
-    spawnBurst(centerPoint);
+      depth: 1,
+    });
     lastPinchTime = now;
   }
 
-  setStatus(pinchActive ? 'Pinch burst!' : 'Tracking finger');
+  const handLabel = rawHands.length > 1 ? `${rawHands.length} hands` : '1 hand';
+  setStatus(pinchActive ? 'Pinch burst!' : `${handLabel} tracking`);
 }
 
 async function setupHandLandmarker() {
@@ -315,18 +704,94 @@ function render() {
 
   predictHands();
 
-  if (smoothPoint) {
-    const speed = previousPoint ? distance(smoothPoint, previousPoint) : 0;
-    spawnTrail(smoothPoint, speed);
-    previousPoint = { ...smoothPoint };
-  } else {
-    previousPoint = null;
+  if (settings.showSkeleton && settings.mode !== 'skeleton3d' && settings.mode !== 'constellation') {
+    detectedHands.forEach((hand) => drawHandSkeleton(hand));
   }
 
+  updateModeEffects();
+  drawRibbons(delta);
   updateAndDrawParticles(delta);
-  drawFingerCursor(smoothPoint);
+  drawFingerCursor(getPrimaryIndexPoint());
+  saveCurrentLandmarksAsPrevious();
 
   requestAnimationFrame(render);
+}
+
+function percentage(value) {
+  return `${Math.round(value)}%`;
+}
+
+function applyCameraStyle() {
+  video.style.opacity = `${settings.cameraOpacity}`;
+  video.style.transform = settings.mirror ? 'scaleX(-1)' : 'scaleX(1)';
+}
+
+function updateSettingLabels() {
+  cameraOpacityValue.textContent = percentage(settings.cameraOpacity * 100);
+  particleIntensityValue.textContent = percentage(settings.intensity * 100);
+  glowStrengthValue.textContent = percentage(settings.glow * 100);
+  trailLifeValue.textContent = percentage(settings.trailLife * 100);
+  smoothingValue.textContent = percentage(settings.smoothing * 100);
+}
+
+function setMode(mode) {
+  settings.mode = mode;
+  const meta = MODE_META[mode];
+  modeTitle.textContent = meta.title;
+  modeDescription.textContent = meta.description;
+
+  modeButtons.forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.mode === mode);
+  });
+}
+
+function bindControls() {
+  modeButtons.forEach((button) => {
+    button.addEventListener('click', () => setMode(button.dataset.mode));
+  });
+
+  cameraOpacity.addEventListener('input', () => {
+    settings.cameraOpacity = Number(cameraOpacity.value) / 100;
+    applyCameraStyle();
+    updateSettingLabels();
+  });
+
+  particleIntensity.addEventListener('input', () => {
+    settings.intensity = Number(particleIntensity.value) / 100;
+    updateSettingLabels();
+  });
+
+  glowStrength.addEventListener('input', () => {
+    settings.glow = Number(glowStrength.value) / 100;
+    updateSettingLabels();
+  });
+
+  trailLife.addEventListener('input', () => {
+    settings.trailLife = Number(trailLife.value) / 100;
+    updateSettingLabels();
+  });
+
+  smoothing.addEventListener('input', () => {
+    settings.smoothing = Number(smoothing.value) / 100;
+    updateSettingLabels();
+  });
+
+  showSkeleton.addEventListener('change', () => {
+    settings.showSkeleton = showSkeleton.checked;
+  });
+
+  mirrorCamera.addEventListener('change', () => {
+    settings.mirror = mirrorCamera.checked;
+    smoothLandmarkMap = new Map();
+    previousLandmarkMap = new Map();
+    applyCameraStyle();
+  });
+
+  clearButton.addEventListener('click', () => {
+    particles = [];
+    ribbons = [];
+    particleCount.textContent = '0';
+  });
 }
 
 async function start() {
@@ -352,5 +817,9 @@ async function start() {
 window.addEventListener('resize', resizeCanvas);
 startButton.addEventListener('click', start);
 
+bindControls();
+setMode(settings.mode);
+applyCameraStyle();
+updateSettingLabels();
 resizeCanvas();
 render();
